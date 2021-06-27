@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>4个核心api的使用</title>
+</head>
+<body>
+  <script src="../dist/vue.global.js"></script>
+  <script>
+    const {reactive, shallowReactive, readonly, shallowReadonly}=Vue
+    const reactiveState = reactive({name: 'cherish',age: {
+      cherish:10
+    }})
+    const shallowReactiveState = shallowReactive({name: 'cherish',age: {
+      cherish:10
+    }})
+    const readonlyState = readonly({name: 'cherish',age: {
+      cherish:10
+    }})
+    const shallowReadonlyState = readonly({name: 'cherish',age: {
+      cherish:10
+    }})
+    console.log(reactiveState.age);
+    console.log(shallowReactiveState.age);
+    readonlyState.name = 'silence'
+    shallowReadonlyState.age = '18'
+  </script>
+</body>
+</html>
