@@ -28,7 +28,7 @@ const toShallow = <T extends unknown>(value: T): T => value
 const getProto = <T extends CollectionTypes>(v: T): any =>
   Reflect.getPrototypeOf(v)
 
-function get(
+function get( // 取值操作
   target: MapTypes,
   key: unknown,
   isReadonly = false,
@@ -40,13 +40,16 @@ function get(
   const rawTarget = toRaw(target)
   const rawKey = toRaw(key)
   if (key !== rawKey) {
+    // key可能是对象也是被proxy过的
     !isReadonly && track(rawTarget, TrackOpTypes.GET, key)
   }
+  // 对rawKey进行依赖收集
   !isReadonly && track(rawTarget, TrackOpTypes.GET, rawKey)
-  const { has } = getProto(rawTarget)
+  const { has } = getProto(rawTarget) // 获取has方法
   const wrap = isShallow ? toShallow : isReadonly ? toReadonly : toReactive
   if (has.call(rawTarget, key)) {
-    return wrap(target.get(key))
+    // 是否包含key
+    return wrap(target.get(key)) // 如果是取到的值是对象接着代理
   } else if (has.call(rawTarget, rawKey)) {
     return wrap(target.get(rawKey))
   } else if (target !== rawTarget) {
@@ -76,12 +79,13 @@ function size(target: IterableCollections, isReadonly = false) {
 }
 
 function add(this: SetTypes, value: unknown) {
-  value = toRaw(value)
+  value = toRaw(value) // 添加的值转为普通值
   const target = toRaw(this)
-  const proto = getProto(target)
-  const hadKey = proto.has.call(target, value)
+  const proto = getProto(target) // 获取目标原型
+  const hadKey = proto.has.call(target, value) // 是否有此key
+  target.add(value) // 添加值
   if (!hadKey) {
-    target.add(value)
+    // 没有则触发add
     trigger(target, TriggerOpTypes.ADD, value, value)
   }
   return this
@@ -92,7 +96,7 @@ function set(this: MapTypes, key: unknown, value: unknown) {
   const target = toRaw(this)
   const { has, get } = getProto(target)
 
-  let hadKey = has.call(target, key)
+  let hadKey = has.call(target, key) // 是否有key
   if (!hadKey) {
     key = toRaw(key)
     hadKey = has.call(target, key)
@@ -101,11 +105,11 @@ function set(this: MapTypes, key: unknown, value: unknown) {
   }
 
   const oldValue = get.call(target, key)
-  target.set(key, value)
+  target.set(key, value) // 添加数据
   if (!hadKey) {
-    trigger(target, TriggerOpTypes.ADD, key, value)
+    trigger(target, TriggerOpTypes.ADD, key, value) // 触发更新 -> 添加逻辑
   } else if (hasChanged(value, oldValue)) {
-    trigger(target, TriggerOpTypes.SET, key, value, oldValue)
+    trigger(target, TriggerOpTypes.SET, key, value, oldValue) // 触发修改
   }
   return this
 }
@@ -155,7 +159,7 @@ function createForEach(isReadonly: boolean, isShallow: boolean) {
     const observed = this as any
     const target = observed[ReactiveFlags.RAW]
     const rawTarget = toRaw(target)
-    const wrap = isShallow ? toShallow : isReadonly ? toReadonly : toReactive
+    const wrap = isReadonly ? toReadonly : isShallow ? toShallow : toReactive
     !isReadonly && track(rawTarget, TrackOpTypes.ITERATE, ITERATE_KEY)
     return target.forEach((value: unknown, key: unknown) => {
       // important: make sure the callback is
@@ -195,7 +199,7 @@ function createIterableMethod(
       method === 'entries' || (method === Symbol.iterator && targetIsMap)
     const isKeyOnly = method === 'keys' && targetIsMap
     const innerIterator = target[method](...args)
-    const wrap = isShallow ? toShallow : isReadonly ? toReadonly : toReactive
+    const wrap = isReadonly ? toReadonly : isShallow ? toShallow : toReactive
     !isReadonly &&
       track(
         rawTarget,
@@ -325,6 +329,7 @@ iteratorMethods.forEach(method => {
 })
 
 function createInstrumentationGetter(isReadonly: boolean, shallow: boolean) {
+  // 返回不同的getter
   const instrumentations = shallow
     ? isReadonly
       ? shallowReadonlyInstrumentations
@@ -339,6 +344,7 @@ function createInstrumentationGetter(isReadonly: boolean, shallow: boolean) {
     receiver: CollectionTypes
   ) => {
     if (key === ReactiveFlags.IS_REACTIVE) {
+      // 处理 isReactive  isReadonly  toRaw
       return !isReadonly
     } else if (key === ReactiveFlags.IS_READONLY) {
       return isReadonly
@@ -347,6 +353,7 @@ function createInstrumentationGetter(isReadonly: boolean, shallow: boolean) {
     }
 
     return Reflect.get(
+      // 对map 、 set的方法进行处理
       hasOwn(instrumentations, key) && key in target
         ? instrumentations
         : target,
@@ -355,7 +362,7 @@ function createInstrumentationGetter(isReadonly: boolean, shallow: boolean) {
     )
   }
 }
-
+// 集合中的方法 map.get  map.set, 最终都会调用get方法
 export const mutableCollectionHandlers: ProxyHandler<CollectionTypes> = {
   get: createInstrumentationGetter(false, false)
 }

@@ -57,8 +57,8 @@ export interface DebuggerEventExtraInfo {
   oldTarget?: Map<any, any> | Set<any>
 }
 
-const effectStack: ReactiveEffect[] = []
-let activeEffect: ReactiveEffect | undefined
+const effectStack: ReactiveEffect[] = [] // 创建effect栈 包装effect执行顺序正确
+let activeEffect: ReactiveEffect | undefined // 当前正在执行的effect
 
 export const ITERATE_KEY = Symbol(__DEV__ ? 'iterate' : '')
 export const MAP_KEY_ITERATE_KEY = Symbol(__DEV__ ? 'Map key iterate' : '')
@@ -72,10 +72,12 @@ export function effect<T = any>(
   options: ReactiveEffectOptions = EMPTY_OBJ
 ): ReactiveEffect<T> {
   if (isEffect(fn)) {
+    // 是否已经是effect,是effect获取对应的原函数
     fn = fn.raw
   }
-  const effect = createReactiveEffect(fn, options)
+  const effect = createReactiveEffect(fn, options) // 创建响应式effect
   if (!options.lazy) {
+    // 是不是立即执行
     effect()
   }
   return effect
@@ -99,15 +101,16 @@ function createReactiveEffect<T = any>(
 ): ReactiveEffect<T> {
   const effect = function reactiveEffect(): unknown {
     if (!effect.active) {
-      return fn()
+      // 如果不是active的，默认为true
+      return options.scheduler ? undefined : fn()
     }
     if (!effectStack.includes(effect)) {
-      cleanup(effect)
+      cleanup(effect) // 每次重新收集依赖 每次重新执行effect 都会取值，那么都会调用get方法，重新进行依赖收集
       try {
-        enableTracking()
+        enableTracking() // shouldTrack = true
         effectStack.push(effect)
         activeEffect = effect
-        return fn()
+        return fn() // get方法
       } finally {
         effectStack.pop()
         resetTracking()
@@ -115,12 +118,12 @@ function createReactiveEffect<T = any>(
       }
     }
   } as ReactiveEffect
-  effect.id = uid++
-  effect.allowRecurse = !!options.allowRecurse
-  effect._isEffect = true
-  effect.active = true
-  effect.raw = fn
-  effect.deps = []
+  effect.id = uid++ // effect 唯一标识
+  effect.allowRecurse = !!options.allowRecurse // 运行effect重复执行
+  effect._isEffect = true // effect是不是effect
+  effect.active = true // 是否激活
+  effect.raw = fn // 对应的原函数
+  effect.deps = [] // effect 对应的属性  effect(()=>state.name+state.age)
   effect.options = options
   return effect
 }
@@ -129,7 +132,8 @@ function cleanup(effect: ReactiveEffect) {
   const { deps } = effect
   if (deps.length) {
     for (let i = 0; i < deps.length; i++) {
-      deps[i].delete(effect)
+      deps[i].delete(effect) // 重新收集
+      // effects.deps = [name,age] name=[] age=[]
     }
     deps.length = 0
   }
@@ -155,6 +159,7 @@ export function resetTracking() {
 
 export function track(target: object, type: TrackOpTypes, key: unknown) {
   if (!shouldTrack || activeEffect === undefined) {
+    // 是否要收集依赖
     return
   }
   let depsMap = targetMap.get(target)
@@ -166,8 +171,9 @@ export function track(target: object, type: TrackOpTypes, key: unknown) {
     depsMap.set(key, (dep = new Set()))
   }
   if (!dep.has(activeEffect)) {
+    // 维护依赖收集结构
     dep.add(activeEffect)
-    activeEffect.deps.push(dep)
+    activeEffect.deps.push(dep) // 将dep 推入到deps中
     if (__DEV__ && activeEffect.options.onTrack) {
       activeEffect.options.onTrack({
         effect: activeEffect,
@@ -196,6 +202,7 @@ export function trigger(
   const effects = new Set<ReactiveEffect>()
   const add = (effectsToAdd: Set<ReactiveEffect> | undefined) => {
     if (effectsToAdd) {
+      // 用于去重
       effectsToAdd.forEach(effect => {
         if (effect !== activeEffect || effect.allowRecurse) {
           effects.add(effect)
@@ -205,11 +212,13 @@ export function trigger(
   }
 
   if (type === TriggerOpTypes.CLEAR) {
+    // 是清空，则调用所有effect
     // collection being cleared
     // trigger all effects for target
     depsMap.forEach(add)
   } else if (key === 'length' && isArray(target)) {
     depsMap.forEach((dep, key) => {
+      // 数组更新
       if (key === 'length' || key >= (newValue as number)) {
         add(dep)
       }
@@ -217,7 +226,7 @@ export function trigger(
   } else {
     // schedule runs for SET | ADD | DELETE
     if (key !== void 0) {
-      add(depsMap.get(key))
+      add(depsMap.get(key)) // 针对key来进行操作
     }
 
     // also run for iteration key on ADD | DELETE | Map.SET
@@ -226,14 +235,15 @@ export function trigger(
         if (!isArray(target)) {
           add(depsMap.get(ITERATE_KEY))
           if (isMap(target)) {
-            add(depsMap.get(MAP_KEY_ITERATE_KEY))
+            add(depsMap.get(MAP_KEY_ITERATE_KEY)) // 针对map的情况
           }
         } else if (isIntegerKey(key)) {
+          // 如果增加了某一项 更新数组
           // new index added to array -> length changes
           add(depsMap.get('length'))
         }
         break
-      case TriggerOpTypes.DELETE:
+      case TriggerOpTypes.DELETE: // 删除处理
         if (!isArray(target)) {
           add(depsMap.get(ITERATE_KEY))
           if (isMap(target)) {
@@ -241,7 +251,7 @@ export function trigger(
           }
         }
         break
-      case TriggerOpTypes.SET:
+      case TriggerOpTypes.SET: // 针对map的修改处理
         if (isMap(target)) {
           add(depsMap.get(ITERATE_KEY))
         }
@@ -262,9 +272,9 @@ export function trigger(
       })
     }
     if (effect.options.scheduler) {
-      effect.options.scheduler(effect)
+      effect.options.scheduler(effect) // 有scheduler选项，会调用scheduler
     } else {
-      effect()
+      effect() // 否则直接执行effect
     }
   }
 

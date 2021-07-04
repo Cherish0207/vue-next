@@ -13,7 +13,7 @@ import {
 } from './collectionHandlers'
 import { UnwrapRef, Ref } from './ref'
 
-export const enum ReactiveFlags {
+export const enum ReactiveFlags { // __ 标识内部变量
   SKIP = '__v_skip',
   IS_REACTIVE = '__v_isReactive',
   IS_READONLY = '__v_isReadonly',
@@ -87,14 +87,17 @@ export type UnwrapNestedRefs<T> = T extends Ref ? T : UnwrapRef<T>
 export function reactive<T extends object>(target: T): UnwrapNestedRefs<T>
 export function reactive(target: object) {
   // if trying to observe a readonly proxy, return the readonly version.
+  // reactive(readonly(obj))
+  // 如果这个对象已经被 readonly代理过了，则直接返回。
+  // 被readonly代理过就会添加proxy,取值时会走get方法
   if (target && (target as Target)[ReactiveFlags.IS_READONLY]) {
     return target
   }
   return createReactiveObject(
-    target,
+    target /* (arr obj)  (map set) */,
     false,
-    mutableHandlers,
-    mutableCollectionHandlers,
+    mutableHandlers /* new Proxy 对应的 handler, 针对普通的数组对象(arr obj) */,
+    mutableCollectionHandlers /*  针对集合Collection (map set) handler */,
     reactiveMap
   )
 }
@@ -178,34 +181,38 @@ function createReactiveObject(
   proxyMap: WeakMap<Target, any>
 ) {
   if (!isObject(target)) {
+    // reactive只接受对象
     if (__DEV__) {
       console.warn(`value cannot be made reactive: ${String(target)}`)
     }
     return target
   }
-  // target is already a Proxy, return it.
-  // exception: calling readonly() on a reactive object
   if (
     target[ReactiveFlags.RAW] &&
     !(isReadonly && target[ReactiveFlags.IS_REACTIVE])
   ) {
+    debugger
+    // target is already a Proxy, return it.
+    // 目标已经是被代理过了
+    // exception: calling readonly() on a reactive object
+    // // readonly(reactive(obj))除外: 如果被reactive 处理过的对象还可以继续被readonly处理
     return target
   }
-  // target already has corresponding Proxy
-  const existingProxy = proxyMap.get(target)
+  // target already has corresponding Proxy  对象 和 代理 进行缓存
+  const existingProxy = proxyMap.get(target) //  reactive(reactive)
   if (existingProxy) {
     return existingProxy
   }
   // only a whitelist of value types can be observed.
-  const targetType = getTargetType(target)
+  const targetType = getTargetType(target) // 看对象是否是可扩展的
   if (targetType === TargetType.INVALID) {
-    return target
+    return target // 不可扩展直接返回
   }
-  const proxy = new Proxy(
+  const proxy = new Proxy( // 核心 创建proxy, 对集合的处理和普通的对象略有不同
     target,
     targetType === TargetType.COLLECTION ? collectionHandlers : baseHandlers
   )
-  proxyMap.set(target, proxy)
+  proxyMap.set(target, proxy) // 缓存起来
   return proxy
 }
 

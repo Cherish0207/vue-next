@@ -4,7 +4,7 @@ import { isArray, isObject, hasChanged } from '@vue/shared'
 import { reactive, isProxy, toRaw, isReactive } from './reactive'
 import { CollectionTypes } from './collectionHandlers'
 
-export declare const RefSymbol: unique symbol
+declare const RefSymbol: unique symbol
 
 export interface Ref<T = any> {
   value: T
@@ -56,12 +56,12 @@ class RefImpl<T> {
 
   public readonly __v_isRef = true
 
-  constructor(private _rawValue: T, public readonly _shallow: boolean) {
+  constructor(private _rawValue: T, public readonly _shallow = false) {
     this._value = _shallow ? _rawValue : convert(_rawValue)
   }
 
   get value() {
-    track(toRaw(this), TrackOpTypes.GET, 'value')
+    track(toRaw(this), TrackOpTypes.GET, 'value') // ref 可能被reactive包裹
     return this._value
   }
 
@@ -86,6 +86,7 @@ export function triggerRef(ref: Ref) {
 }
 
 export function unref<T>(ref: T): T extends Ref<infer V> ? V : T {
+  // 返回value
   return isRef(ref) ? (ref.value as any) : ref
 }
 

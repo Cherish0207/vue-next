@@ -1,12 +1,16 @@
 ## 初始化项目
 
 ```bash
-git clone git@github.com:vuejs/vue-next.git
+git clone git@github.com:vuejs/vue-next.git --depth 1
 rm -rf .git
 git init
 ```
 
 ## 源码使用方式
+
+- reactive
+- effect track / trigger
+- ref
 
 1. 安装依赖
 
@@ -16,6 +20,23 @@ git init
 
 - `npm run dev`默认找的是`packages/vue`包，并不是把所有包的方法都暴露在了全局下，当
 - `yarn run build`把所有包都打包
+
+ps.改写打包的入口文件 默认是 vue -> reactivity
+
+3. 看源码的几种方案
+
+- 从单元测试入手,可以看一些特殊场景
+- 当前包的`index.js`入口文件
+
+## 查看 `package.json`
+
+- `npm run dev`:开发可以方便调试实时监控源码的变化
+- `npm run build`把`packages`:所有的包都进行打包
+
+## `menorepo`
+
+> 一个项目下管理多个包
+> 如`element-plus`,把每个组件都抽成一个包,我们可以单独使用某个包,而且可以方便知道某个组件的下载量
 
 ## 副作用函数 effect
 
